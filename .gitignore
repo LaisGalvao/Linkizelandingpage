@@ -29,3 +29,4 @@ capture.js
 *.njsproj
 *.sln
 *.sw?
+.env

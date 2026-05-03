@@ -1,11 +1,19 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import FeatureList from './components/FeatureList.vue'
 import TargetAudience from './components/TargetAudience.vue'
 import HowItWorks from './components/HowItWorks.vue'
 import PricingSection from './components/PricingSection.vue'
 import FaqSection from './components/FaqSection.vue'
 import CtaSection from './components/CtaSection.vue'
+import LeadModal from './components/LeadModal.vue'
 import { MessageSquare } from 'lucide-vue-next'
+
+const isModalOpen = ref(false)
+
+const openModal = () => {
+  isModalOpen.value = true
+}
 
 const scrollToSection = (id: string) => {
   const element = document.getElementById(id)
@@ -25,15 +33,15 @@ const scrollToSection = (id: string) => {
           </div>
           <span class="logo-text">Linkize</span>
         </div>
-        <button class="btn btn-primary" @click="scrollToSection('pricing')">Começar grátis</button>
+        <button class="btn btn-primary" @click="openModal">Começar grátis</button>
       </header>
 
       <div class="hero animate-fade-in delay-1">
         <h1 class="title">Venda pelo WhatsApp. Profissionalmente.</h1>
         <p class="subtitle">Transforme seu WhatsApp no principal canal de vendas. Catálogo organizado, pedidos fáceis, métricas reais. Sem complicação.</p>
         <div class="hero-actions">
-          <button class="btn btn-primary hero-btn" @click="scrollToSection('pricing')">
-            <MessageSquare class="btn-icon" size="18" /> Começar agora
+          <button class="btn btn-primary hero-btn" @click="openModal">
+            <MessageSquare class="btn-icon" :size="18" /> Começar agora
           </button>
           <button class="btn btn-outline hero-btn" @click="scrollToSection('how-it-works')">Ver como funciona</button>
         </div>
@@ -42,17 +50,19 @@ const scrollToSection = (id: string) => {
       <FeatureList class="animate-fade-in delay-2" />
       <HowItWorks id="how-it-works" class="animate-fade-in delay-3" />
       <TargetAudience class="animate-fade-in delay-3" />
-      <PricingSection id="pricing" class="animate-fade-in delay-3" />
+      <PricingSection id="pricing" class="animate-fade-in delay-3" @open-modal="openModal" />
       <FaqSection id="faq" class="animate-fade-in delay-3" />
     </div>
 
     <!-- CtaSection could also trigger scroll to pricing if its button is clicked. Let's pass an event or just do it inside. For simplicity, since it's a separate component, I can emit an event or just let it handle it. I'll emit an event. -->
-    <CtaSection class="animate-fade-in delay-3" @click-cta="scrollToSection('pricing')" />
+    <CtaSection class="animate-fade-in delay-3" @click-cta="openModal" />
 
     <footer class="footer animate-fade-in delay-3">
       <a href="#faq" class="footer-link" @click.prevent="scrollToSection('faq')">Perguntas Frequentes</a>
       <p>&copy; 2026 Linkize. O Shopify do WhatsApp raiz brasileiro.</p>
     </footer>
+
+    <LeadModal :isOpen="isModalOpen" @close="isModalOpen = false" />
   </main>
 </template>
 

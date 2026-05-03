@@ -2,6 +2,8 @@
 import { Check } from 'lucide-vue-next'
 import { ref } from 'vue'
 
+const emit = defineEmits(['open-modal'])
+
 const isAnnual = ref(true)
 
 const plans = [
@@ -64,7 +66,7 @@ const plans = [
           </li>
         </ul>
         
-        <button class="btn" :class="plan.isPopular ? 'btn-primary' : 'btn-outline'">
+        <button class="btn" :class="plan.isPopular ? 'btn-primary' : 'btn-outline'" @click="emit('open-modal')">
           {{ plan.buttonText }}
         </button>
       </div>
