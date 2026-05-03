@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { vMaska } from 'maska/vue'
 import { X, CheckCircle } from 'lucide-vue-next'
-import { supabase } from '../lib/supabase'
+import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase'
 
 const props = defineProps({
   isOpen: Boolean
@@ -55,9 +55,14 @@ const handleSubmit = async () => {
       cleanedWhatsapp = '55' + cleanedWhatsapp
     }
 
-    // 1. Chamar a Edge Function do Supabase
-    const { error: functionError } = await supabase.functions.invoke('send-lead-notification', {
-      body: {
+    // 1. Chamar a Edge Function do Supabase via fetch para evitar erro de CORS com headers internos do SDK
+    const response = await fetch(`${supabaseUrl}/functions/v1/send-lead-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`
+      },
+      body: JSON.stringify({
         full_name: fullName.value,
         email: email.value,
         whatsapp: cleanedWhatsapp,
@@ -69,11 +74,11 @@ const handleSubmit = async () => {
           referrer: document.referrer,
           landingPath: window.location.pathname
         }
-      }
+      })
     })
 
-    if (functionError) {
-      console.error('Edge Function error:', functionError)
+    if (!response.ok) {
+      console.error('Edge Function error status:', response.status)
       throw new Error('Falha ao enviar notificação.')
     }
 
