@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { X } from 'lucide-vue-next'
+import { vMaska } from 'maska/vue'
+import { X, CheckCircle } from 'lucide-vue-next'
 import { supabase } from '../lib/supabase'
 
 const props = defineProps({
@@ -13,6 +14,7 @@ const fullName = ref('')
 const email = ref('')
 const whatsapp = ref('')
 const isSubmitting = ref(false)
+const isSuccess = ref(false)
 const errorMsg = ref('')
 
 const handleKeydown = (e: KeyboardEvent) => {
@@ -41,18 +43,48 @@ const handleSubmit = async () => {
 
   try {
     const urlParams = new URLSearchParams(window.location.search)
-    const utm_source = urlParams.get('utm_source') || null
-    const utm_medium = urlParams.get('utm_medium') || null
-    const utm_campaign = urlParams.get('utm_campaign') || null
+    const utm_source = urlParams.get('utm_source') || 'direct'
+    const utm_medium = urlParams.get('utm_medium') || 'none'
+    const utm_campaign = urlParams.get('utm_campaign') || 'none'
 
-    // 1. Salvar no Supabase
-    const { error } = await supabase
+    // Limpar o número do WhatsApp (remover caracteres da máscara)
+    let cleanedWhatsapp = whatsapp.value.replace(/\D/g, '')
+    
+    // Adicionar DDI 55 se não estiver presente
+    if (cleanedWhatsapp.length <= 11 && !cleanedWhatsapp.startsWith('55')) {
+      cleanedWhatsapp = '55' + cleanedWhatsapp
+    }
+
+    // 1. Chamar a Edge Function do Supabase
+    const { error: functionError } = await supabase.functions.invoke('send-lead-notification', {
+      body: {
+        full_name: fullName.value,
+        email: email.value,
+        whatsapp: cleanedWhatsapp,
+        utm_source,
+        utm_medium,
+        utm_campaign,
+        metadata: {
+          userAgent: navigator.userAgent,
+          referrer: document.referrer,
+          landingPath: window.location.pathname
+        }
+      }
+    })
+
+    if (functionError) {
+      console.error('Edge Function error:', functionError)
+      throw new Error('Falha ao enviar notificação.')
+    }
+
+    // 2. Salvar no Supabase (Opcional, mantendo para histórico se o banco ainda estiver ativo)
+    await supabase
       .from('leads')
       .insert([
         {
           full_name: fullName.value,
           email: email.value,
-          whatsapp: whatsapp.value,
+          whatsapp: cleanedWhatsapp,
           source: 'landing_page',
           utm_source,
           utm_medium,
@@ -60,32 +92,21 @@ const handleSubmit = async () => {
         }
       ])
 
-    if (error) {
-      console.error(error)
-      throw new Error('Falha ao conectar com o banco de dados.')
-    }
-
-    // 2. Disparar WhatsApp para os DOIS números
-    const waMessage = encodeURIComponent(`Olá, me chamo ${fullName.value} e gostaria de saber mais sobre a Linkize!`)
-    const waLink1 = `https://wa.me/5511997628274?text=${waMessage}`
-    const waLink2 = `https://wa.me/5511952327870?text=${waMessage}`
+    // Sucesso!
+    isSuccess.value = true
     
-    // Abre o primeiro link em uma nova aba
-    window.open(waLink1, '_blank')
-    
-    // Tenta abrir o segundo link em outra aba (o navegador pode alertar sobre pop-ups)
+    // Limpar campos
     setTimeout(() => {
-      window.open(waLink2, '_blank')
       emit('close')
-      
       fullName.value = ''
       email.value = ''
       whatsapp.value = ''
-    }, 500)
+      isSuccess.value = false
+    }, 3000)
 
   } catch (err: any) {
-    console.error('Erro ao salvar lead:', err)
-    errorMsg.value = 'Ocorreu um erro ao salvar seus dados. Verifique sua conexão e tente novamente.'
+    console.error('Erro ao processar lead:', err)
+    errorMsg.value = 'Ocorreu um erro ao enviar seus dados. Tente novamente em alguns instantes.'
   } finally {
     isSubmitting.value = false
   }
@@ -99,12 +120,18 @@ const handleSubmit = async () => {
         <X :size="24" />
       </button>
       
-      <div class="modal-header">
+      <div v-if="!isSuccess" class="modal-header">
         <h2>Fale com a gente!</h2>
         <p>Preencha os dados abaixo para iniciar sua jornada ou falar com nosso time.</p>
       </div>
 
-      <form @submit.prevent="handleSubmit" class="lead-form">
+      <div v-else class="success-state animate-pop">
+        <CheckCircle :size="48" class="success-icon" />
+        <h2>Dados enviados!</h2>
+        <p>Recebemos suas informações. Em breve entraremos em contato.</p>
+      </div>
+
+      <form v-if="!isSuccess" @submit.prevent="handleSubmit" class="lead-form">
         <div class="form-group">
           <label for="name">Nome Completo</label>
           <input type="text" id="name" v-model="fullName" placeholder="Digite seu nome" required />
@@ -117,13 +144,20 @@ const handleSubmit = async () => {
         
         <div class="form-group">
           <label for="whatsapp">WhatsApp</label>
-          <input type="tel" id="whatsapp" v-model="whatsapp" placeholder="(11) 90000-0000" required />
+          <input 
+            type="tel" 
+            id="whatsapp" 
+            v-model="whatsapp" 
+            v-maska="'(##) #####-####'"
+            placeholder="(11) 90000-0000" 
+            required 
+          />
         </div>
 
         <p v-if="errorMsg" class="error-msg">{{ errorMsg }}</p>
 
         <button type="submit" class="btn btn-primary submit-btn" :disabled="isSubmitting">
-          {{ isSubmitting ? 'Enviando...' : 'Avançar para o WhatsApp' }}
+          {{ isSubmitting ? 'Enviando...' : 'Enviar agora' }}
         </button>
       </form>
     </div>
@@ -245,5 +279,28 @@ const handleSubmit = async () => {
 .submit-btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+.success-state {
+  text-align: center;
+  padding: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.success-icon {
+  color: var(--primary);
+}
+
+.success-state h2 {
+  font-size: 1.5rem;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.success-state p {
+  color: var(--text-muted);
 }
 </style>
