@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { vMaska } from 'maska/vue'
 import { X, CheckCircle } from 'lucide-vue-next'
-import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 
 const props = defineProps({
   isOpen: Boolean
@@ -55,15 +55,9 @@ const handleSubmit = async () => {
       cleanedWhatsapp = '55' + cleanedWhatsapp
     }
 
-    // 1. Chamar a Edge Function do Supabase via fetch para evitar erro de CORS com headers internos do SDK
-    const response = await fetch(`${supabaseUrl}/functions/v1/send-lead-notification`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseAnonKey}`,
-        'apikey': supabaseAnonKey
-      },
-      body: JSON.stringify({
+    // 1. Chamar a Edge Function do Supabase
+    const { error: functionError } = await supabase.functions.invoke('send-lead-notification', {
+      body: {
         full_name: fullName.value,
         email: email.value,
         whatsapp: cleanedWhatsapp,
@@ -75,12 +69,36 @@ const handleSubmit = async () => {
           referrer: document.referrer,
           landingPath: window.location.pathname
         }
-      })
+      }
     })
 
-    if (!response.ok) {
-      console.error('Edge Function error status:', response.status)
-      throw new Error('Falha ao enviar notificação.')
+    if (functionError) {
+      console.error('Edge Function error:', functionError)
+      // Não lançar erro aqui para permitir que o insert no banco aconteça mesmo se a notificação falhar
+    }
+
+    // 2. Salvar no banco (tabela leads)
+    const { error: dbError } = await supabase
+      .from('leads')
+      .insert([
+        {
+          full_name: fullName.value,
+          email: email.value,
+          whatsapp: cleanedWhatsapp,
+          utm_source,
+          utm_medium,
+          utm_campaign,
+          metadata: {
+            userAgent: navigator.userAgent,
+            referrer: document.referrer,
+            landingPath: window.location.pathname
+          }
+        }
+      ])
+
+    if (dbError) {
+      console.error('Database error:', dbError)
+      throw new Error('Falha ao salvar lead no banco.')
     }
 
     // Sucesso!
