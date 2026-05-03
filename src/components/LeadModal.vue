@@ -60,7 +60,8 @@ const handleSubmit = async () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseAnonKey}`
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'apikey': supabaseAnonKey
       },
       body: JSON.stringify({
         full_name: fullName.value,
@@ -81,21 +82,6 @@ const handleSubmit = async () => {
       console.error('Edge Function error status:', response.status)
       throw new Error('Falha ao enviar notificação.')
     }
-
-    // 2. Salvar no Supabase (Opcional, mantendo para histórico se o banco ainda estiver ativo)
-    await supabase
-      .from('leads')
-      .insert([
-        {
-          full_name: fullName.value,
-          email: email.value,
-          whatsapp: cleanedWhatsapp,
-          source: 'landing_page',
-          utm_source,
-          utm_medium,
-          utm_campaign
-        }
-      ])
 
     // Sucesso!
     isSuccess.value = true
